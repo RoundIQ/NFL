@@ -1,0 +1,533 @@
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Narrow:wght@600;700&display=swap');
+:root{color-scheme:dark;--field:#0d1714;--turf:#152420;--line:#24382f;--chalk:#e9efe9;--muted:#a8bcb2;
+--dead:#8a9c94;--lean:#f0bc57;--play:#5fc79a;--strong:#8ce6b0;--warn:#f08a66;}
+*{box-sizing:border-box}
+html,body{margin:0;background:#0d1714;color:#e9efe9}
+#app{background:var(--field);color:var(--chalk);min-height:100vh;font-family:'Archivo',system-ui,sans-serif;
+font-size:16px;line-height:1.55;font-variant-numeric:tabular-nums;padding-bottom:3rem}
+h1,h2{font-family:'Archivo Narrow','Archivo',sans-serif;font-weight:700;margin:0}
+h1{font-size:1.5rem}h2{font-size:1.05rem;margin-bottom:.6rem}
+.hdr{position:sticky;top:0;z-index:20;background:var(--field);border-bottom:1px solid var(--line);
+padding:.85rem 1rem;display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}
+.hdr .sub{color:var(--muted);font-size:.8rem}
+.wrap{max-width:680px;margin:0 auto;padding:0 1rem}
+.panel{border:1px solid var(--line);border-radius:10px;background:var(--turf);padding:.9rem;margin-top:.9rem}
+label{display:block;font-size:.84rem;color:var(--muted);margin-bottom:.25rem}
+input,select,button,textarea{font-family:inherit;font-size:.95rem;font-variant-numeric:tabular-nums}
+option{background:#0b1310;color:#e9efe9}
+input,select,textarea{width:100%;background:#0b1310;color:var(--chalk);border:1px solid var(--line);
+border-radius:7px;padding:.5rem .55rem}
+textarea{min-height:80px;font-size:.85rem}
+button{background:var(--line);color:var(--chalk);border:1px solid #31493d;border-radius:7px;
+padding:.55rem .8rem;cursor:pointer}
+button:hover{background:#2c463a}
+button.primary{background:var(--play);color:#06120d;border-color:var(--play);font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.chip{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:.15rem .6rem;
+font-size:.85rem;color:var(--muted);margin:.15rem .25rem .15rem 0}
+.chip.ok{border-color:var(--play);color:var(--play)}
+.chip.bad{border-color:var(--warn);color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:.95rem;color:var(--chalk);background:transparent}
+td,th{padding:.55rem .35rem;border-bottom:1px solid #24382f;text-align:right}
+td{font-weight:500;color:var(--chalk);background:transparent}
+td:first-child,th:first-child{text-align:left}
+th{color:var(--muted);font-weight:600;font-size:.82rem;letter-spacing:.02em}
+.note{font-size:.88rem;color:var(--muted);margin-top:.55rem;line-height:1.5}
+.err{color:var(--warn);font-size:.92rem;margin-top:.5rem;white-space:pre-wrap;line-height:1.5}
+details{margin-top:.6rem}summary{cursor:pointer;color:var(--muted);font-size:.92rem;padding:.3rem 0}
+.flag{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:.85rem;
+padding:.15rem .5rem;border-radius:4px;border:1px solid;white-space:nowrap}
+.f0{color:var(--dead);border-color:var(--dead)}
+.f1{color:var(--lean);border-color:var(--lean)}
+.f2{color:var(--play);border-color:var(--play)}
+.f3{color:var(--strong);border-color:var(--strong);background:#12291e}
+.fn{color:var(--warn);border-color:var(--warn)}
+tr.pl{cursor:pointer}tr.pl:hover td{background:#1c3029}
+td:first-child{font-weight:600;font-size:1rem}
+.sub2{color:var(--muted);font-size:.83rem}
+hr{border:0;border-top:1px solid var(--line);margin:.8rem 0}
+</style>
+<div id="app">
+<div class="hdr"><h1>Matchup Board</h1><span class="sub" id="hdrsub">no data loaded</span></div>
+<div class="wrap">
+
+<div class="panel">
+<h2>1 &middot; Data</h2>
+<div class="grid2">
+ <div><label for="season">Stats from season (history)</label><select id="season"></select></div>
+ <div><label for="lookback">Use last N weeks (0 = all)</label><input id="lookback" type="number" value="0" min="0"></div>
+</div>
+<div class="row" style="margin-top:.6rem">
+ <button id="autoFetch">Try auto-fetch</button>
+ <label for="fileIn" style="margin:0"><button onclick="document.getElementById('fileIn').click()">Load CSV file</button></label>
+ <input id="fileIn" type="file" accept=".csv" style="display:none">
+</div>
+<div class="row" style="margin-top:.6rem">
+ <div style="flex:1"><label for="slateYear">Season you are betting (rosters + schedule)</label>
+  <select id="slateYear"></select></div>
+ <div style="display:flex;align-items:flex-end"><button id="loadRoster">Update teams</button></div>
+</div>
+<div id="dataStatus" style="margin-top:.6rem"></div>
+<div id="rosterStatus" style="margin-top:.4rem"></div>
+<div class="err" id="dataErr"></div>
+<details><summary>Where the file comes from</summary>
+<div class="note">nflverse publishes weekly player stats as a public CSV, no key or account. Every row carries the player's position and his opponent, so one file gives both player usage and what each defense allowed by position. If auto-fetch is blocked, download it yourself and load it here &mdash; same data, and it only updates once a week.
+<br><br><strong style="color:var(--chalk)">Where:</strong> github.com/nflverse/nflverse-data/releases &rarr; find the <strong style="color:var(--chalk)">stats_player</strong> release &rarr; download <strong style="color:var(--chalk)">stats_player_week_YYYY.csv</strong>
+<br><br>Take the plain <strong style="color:var(--chalk)">.csv</strong>, not .csv.gz, .rds or .parquet &mdash; the browser cannot read those. The file is large (roughly 20,000 rows and 150 columns), so give it a few seconds to parse.</div></details>
+</div>
+
+<div class="panel">
+<h2>2 &middot; Schedule</h2>
+<div class="grid3">
+ <div><label for="week">Week</label><input id="week" type="number" value="1" min="1" max="18"></div>
+ <div style="display:flex;align-items:flex-end"><button id="fetchSched" style="width:100%">Fetch</button></div>
+ <div style="display:flex;align-items:flex-end"><button id="manualSched" style="width:100%">Enter by hand</button></div>
+</div>
+<div id="schedStatus" style="margin-top:.6rem"></div>
+<div id="schedManual" style="display:none;margin-top:.6rem">
+ <label for="schedText">One game per line, away @ home, using the same abbreviations as the stats file</label>
+ <textarea id="schedText" placeholder="BUF @ MIA&#10;KC @ LAC&#10;DAL @ PHI"></textarea>
+ <button id="applySched" style="margin-top:.5rem">Apply</button>
+</div>
+</div>
+
+<div class="panel">
+<h2>3 &middot; Settings</h2>
+<div class="grid3">
+ <div><label for="pos">Position</label><select id="pos">
+  <option value="ALL">All</option><option value="WR">WR</option>
+  <option value="TE">TE</option><option value="RB">RB</option></select></div>
+ <div><label for="minG">Min games</label><input id="minG" type="number" value="3" min="1"></div>
+ <div><label for="damp">Damping</label><input id="damp" type="number" step="0.05" value="0.5"></div>
+</div>
+<div class="grid2" style="margin-top:.6rem">
+ <div><label for="minBig">Min big-day chance to appear (%)</label><input id="minBig" type="number" step="1" value="5"></div>
+ <div><label for="minTgt">Min targets / game</label><input id="minTgt" type="number" step="0.5" value="2.5"></div>
+</div>
+<div class="grid3" style="margin-top:.6rem">
+ <div><label for="bWR">WR big day</label><input id="bWR" type="number" value="100"></div>
+ <div><label for="bTE">TE big day</label><input id="bTE" type="number" value="60"></div>
+ <div><label for="bRB">RB big day</label><input id="bRB" type="number" value="100"></div>
+</div>
+<button class="primary" id="run" style="margin-top:.7rem;width:100%">Build board</button>
+<div class="err" id="runErr"></div>
+</div>
+
+<div class="panel" id="defPanel" style="display:none">
+<h2>Defenses</h2>
+<div class="row" style="margin-bottom:.5rem">
+ <label style="margin:0">vs</label>
+ <select id="defPos" style="width:auto"><option>WR</option><option>TE</option><option>RB</option></select>
+</div>
+<div id="defTable"></div>
+<div class="note">Rank 1 allows the least per target. Rank 32 is the matchup you are hunting.</div>
+</div>
+
+<div class="panel" id="boardPanel" style="display:none">
+<h2>Players</h2>
+<div id="board"></div>
+</div>
+
+<div class="note" style="margin-top:1.5rem;border-top:1px solid var(--line);padding-top:.8rem">
+Every number here comes from your CSV and nowhere else. A strong matchup is a reason to go look at the price, not a bet. Flat stakes. 1-800-GAMBLER.
+</div>
+</div></div>
+<script>
+/* Pure logic, extracted so it can be tested without a browser. */
+const ALIAS={
+ pid:['pid','player_id','gsis_id'],
+ player:['player','player_display_name','player_name','full_name'],
+ pos:['pos','position_group','position'],
+ team:['team','recent_team','posteam','team_abbr'],
+ opp:['opp','opponent_team','opponent','defteam'],
+ week:['week'],season:['season'],
+ targets:['targets'],recyd:['recyd','receiving_yards'],rec:['rec','receptions'],
+ carries:['carries','rushing_attempts'],rushyd:['rushyd','rushing_yards'],
+ atts:['atts','attempts','passing_attempts'],passyd:['passyd','passing_yards'],
+};
+function resolve(header){
+ const map={},missing=[];
+ for(const k in ALIAS){
+  const hit=ALIAS[k].find(a=>header.includes(a));
+  if(hit)map[k]=hit; else missing.push(k);
+ }
+ return{map,missing};
+}
+function parseCSV(txt){
+ const lines=txt.trim().split(/\r?\n/);
+ const head=splitLine(lines[0]);
+ const rows=[];
+ for(let i=1;i<lines.length;i++){
+  if(!lines[i])continue;
+  const c=splitLine(lines[i]);const o={};
+  head.forEach((h,j)=>o[h]=c[j]);
+  rows.push(o);
+ }
+ return{head,rows};
+}
+function splitLine(l){
+ const out=[];let cur='',q=false;
+ for(let i=0;i<l.length;i++){const ch=l[i];
+  if(ch==='"'){q=!q;continue;}
+  if(ch===','&&!q){out.push(cur);cur='';continue;}
+  cur+=ch;}
+ out.push(cur);return out;
+}
+const n=v=>{const x=parseFloat(v);return isFinite(x)?x:0;};
+
+/* Defense: attribute every receiving line to the opponent, split by position. */
+function buildDefense(rows,M,minWeek){
+ const D={},L={};
+ for(const r of rows){
+  if(minWeek&&n(r[M.week])<minWeek)continue;
+  const opp=r[M.opp],pos=(r[M.pos]||'').toUpperCase();
+  if(!opp||!['WR','TE','RB'].includes(pos))continue;
+  D[opp]=D[opp]||{};
+  const b=D[opp][pos]=D[opp][pos]||{tgt:0,yds:0,car:0,ryds:0};
+  b.tgt+=n(r[M.targets]);b.yds+=n(r[M.recyd]);
+  b.car+=n(r[M.carries]);b.ryds+=n(r[M.rushyd]);
+  const l=L[pos]=L[pos]||{tgt:0,yds:0,car:0,ryds:0};
+  l.tgt+=n(r[M.targets]);l.yds+=n(r[M.recyd]);
+  l.car+=n(r[M.carries]);l.ryds+=n(r[M.rushyd]);
+ }
+ const lg={};for(const p in L){lg[p]={ypt:L[p].tgt?L[p].yds/L[p].tgt:0,ypc:L[p].car?L[p].ryds/L[p].car:0};}
+ const out={};
+ for(const t in D){out[t]={};
+  for(const p in D[t]){const b=D[t][p];
+   out[t][p]={ypt:b.tgt?b.yds/b.tgt:null,ypc:b.car?b.ryds/b.car:null,tgt:b.tgt,car:b.car};}}
+ return{def:out,lg};
+}
+/* Ranks: 1 = toughest (least allowed), 32 = softest. */
+function rankDefenses(def,pos,metric){
+ const arr=Object.keys(def).filter(t=>def[t][pos]&&def[t][pos][metric]!=null)
+  .map(t=>({team:t,v:def[t][pos][metric]}));
+ arr.sort((a,b)=>a.v-b.v);
+ const r={};arr.forEach((x,i)=>r[x.team]=i+1);
+ return{ranks:r,n:arr.length};
+}
+function buildPlayers(rows,M,minWeek){
+ const P={};
+ for(const r of rows){
+  if(minWeek&&n(r[M.week])<minWeek)continue;
+  const nm=r[M.player];if(!nm)continue;
+  const id=M.pid?r[M.pid]:null;
+  const k=id||(nm+'|'+r[M.team]);
+  const p=P[k]=P[k]||{pid:id,name:nm,team:r[M.team],pos:(r[M.pos]||'').toUpperCase(),g:0,
+   tgt:0,recyd:0,rec:0,car:0,rushyd:0,atts:0,passyd:0};
+  p.g++;p.tgt+=n(r[M.targets]);p.recyd+=n(r[M.recyd]);p.rec+=n(r[M.rec]);
+  p.car+=n(r[M.carries]);p.rushyd+=n(r[M.rushyd]);
+  p.atts+=n(r[M.atts]);p.passyd+=n(r[M.passyd]);
+ }
+ return Object.values(P);
+}
+/* Lognormal tail, same engine as the manual tool. */
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);
+ const a1=.254829592,a2=-.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=.3275911;
+ const t=1/(1+p*x);return s*(1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t)*Math.exp(-x*x));}
+const normCdf=x=>0.5*(1+erf(x/Math.SQRT2));
+function pAbove(mean,cv,x){if(mean<=0)return 0;const s=Math.sqrt(Math.log(1+cv*cv));
+ return 1-normCdf((Math.log(x)-(Math.log(mean)-s*s/2))/s);}
+
+function evaluate(players,D,schedule,opt){
+ const{damp=0.5,minGames=3,minTgtPg=2.5,minCarPg=5,minBigProb=0.05,
+  big={WR:100,TE:60,RB:100,QB:300},cv={WR:0.5,TE:0.5,RB:0.5,QB:0.28}}=opt||{};
+ const out=[];
+ for(const p of players){
+  if(p.g<minGames)continue;
+  const opp=schedule[p.team];if(!opp)continue;
+  const dpos=D.def[opp],lg=D.lg[p.pos];
+  let mean=null,neutral=null,stat=null,oppV=null,lgV=null;
+  if(['WR','TE'].includes(p.pos)&&p.tgt>0){
+   const tpg=p.tgt/p.g, ypt=p.recyd/p.tgt;
+   if(tpg<minTgtPg)continue;   // fringe usage: no realistic path to a big day
+   oppV=dpos&&dpos[p.pos]?dpos[p.pos].ypt:null; lgV=lg?lg.ypt:null;
+   if(oppV&&lgV){neutral=tpg*ypt;mean=neutral*Math.pow(oppV/lgV,damp);stat='rec yds';}
+  }else if(p.pos==='RB'&&p.car>0){
+   const cpg=p.car/p.g, ypc=p.rushyd/p.car;
+   if(cpg<minCarPg)continue;
+   oppV=dpos&&dpos.RB?dpos.RB.ypc:null; lgV=lg?lg.ypc:null;
+   if(oppV&&lgV){neutral=cpg*ypc;mean=neutral*Math.pow(oppV/lgV,damp);stat='rush yds';}
+  }
+  if(mean==null)continue;
+  const c=cv[p.pos]||0.5, thr=big[p.pos]||100;
+  const pb=pAbove(mean,c,thr), pn=pAbove(neutral,c,thr);
+  // A player with no realistic path to the threshold has a lift near zero no
+  // matter the opponent, which would float him above genuinely hurt starters
+  // whenever every lift is negative. He is not a big-day candidate: drop him.
+  if(Math.max(pb,pn)<minBigProb)continue;
+  out.push({...p,opp,stat,mean,neutral,oppV,lgV,thr,pBig:pb,pNeutral:pn,lift:pb-pn,
+   mult:Math.pow(oppV/lgV,damp)});
+ }
+ out.sort((a,b)=>(b.lift-a.lift)||(b.pBig-a.pBig));
+ return out;
+}
+
+/* ---------------- app ---------------- */
+const $=id=>document.getElementById(id);
+let RAW=null,MAP=null,DEF=null,SCHED=null,PLAYERS=null;
+
+(function(){const y=new Date().getFullYear();
+ const s=$('season'), rs=$('slateYear');
+ for(let i=y;i>=y-4;i--){s.innerHTML+=`<option>${i}</option>`;rs.innerHTML+=`<option>${i}</option>`;}
+ s.value=String(y-1);   // stats: last completed season
+ rs.value=String(y);    // rosters: current season
+})();
+
+function status(el,html){$(el).innerHTML=html;}
+
+async function tryFetch(){
+ $('dataErr').textContent='';
+ const yr=$('season').value;
+ status('dataStatus','<span class="chip">trying server route…</span>');
+
+ // 1. Own API route. Fetches server-side (no CORS) and returns only the 13
+ //    columns this tool uses instead of all ~150.
+ try{
+  const r=await fetch(`/api/stats?season=${yr}`);
+  if(r.ok){
+   const t=await r.text();
+   if(t.length>200){
+    ingest(t,`server · ${r.headers.get('X-Rows')||'?'} rows · ${r.headers.get('X-Dropped-Columns')||'?'} cols dropped`);
+    return;
+   }
+  }else if(r.status!==404){
+   const j=await r.json().catch(()=>null);
+   if(j&&j.error==='schema changed'){
+    status('dataStatus','<span class="chip bad">upstream schema changed</span>');
+    $('dataErr').textContent='The server route found the file but its columns have changed: missing '+
+     (j.missing||[]).join(', ')+'. The alias list in api/stats.js needs updating.';
+    return;
+   }
+  }
+ }catch(e){/* not deployed, or route absent — fall through */}
+
+ // 2. Direct from GitHub. Works only if the browser allows it.
+ status('dataStatus','<span class="chip">server route unavailable, trying direct…</span>');
+ const cands=[
+  `https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_${yr}.csv`,
+  `https://github.com/nflverse/nflverse-data/releases/download/player_stats/player_stats_${yr}.csv`,
+ ];
+ for(const u of cands){
+  try{
+   const r=await fetch(u);
+   if(!r.ok)continue;
+   const t=await r.text();
+   if(t.length<200)continue;
+   ingest(t,u.split('/').pop());
+   return;
+  }catch(e){}
+ }
+
+ // 3. Manual.
+ status('dataStatus','<span class="chip bad">auto-fetch failed</span>');
+ $('dataErr').textContent=
+  'Neither the server route nor a direct call worked.\n'+
+  'If you are opening this as a local file, deploy it instead — the /api/stats route makes this reliable.\n'+
+  'Otherwise download stats_player_week_'+yr+'.csv from the nflverse releases page and use "Load CSV file".';
+}
+
+function ingest(text,label){
+ const p=parseCSV(text);
+ const {map,missing}=resolve(p.head);
+ RAW=p.rows;MAP=map;
+ const need=missing.filter(k=>['player','pos','team','opp','week'].includes(k));
+ let h=`<span class="chip ok">${p.rows.length.toLocaleString()} rows</span>`+
+  `<span class="chip">${label||'uploaded'}</span>`;
+ for(const k of ['player','pos','team','opp','targets','recyd','carries','rushyd'])
+  h+=`<span class="chip ${map[k]?'ok':'bad'}">${k}${map[k]?' → '+map[k]:' MISSING'}</span>`;
+ status('dataStatus',h);
+ if(need.length){
+  RAW=null;
+  $('dataErr').textContent='Required columns missing: '+need.join(', ')+
+   '\nThis file is not in the expected shape, so nothing will be computed. Check you grabbed the weekly player stats file.';
+  return;
+ }
+ $('dataErr').textContent='';
+ $('hdrsub').textContent=`${p.rows.length.toLocaleString()} player-weeks loaded`;
+}
+
+$('autoFetch').onclick=tryFetch;
+$('fileIn').onchange=e=>{const f=e.target.files[0];if(!f)return;
+ const r=new FileReader();r.onload=()=>ingest(r.result,f.name);r.readAsText(f);};
+
+let ROSTER=null;
+async function loadRoster(){
+ const yr=$('slateYear').value;
+ status('rosterStatus','<span class="chip">fetching rosters…</span>');
+ let txt=null;
+ try{
+  const r=await fetch(`/api/roster?season=${yr}`);
+  if(r.ok) txt=await r.text();
+  else if(r.status!==404){
+   const j=await r.json().catch(()=>null);
+   status('rosterStatus',`<span class="chip bad">${(j&&j.error)||'roster fetch failed'}</span>`);
+   return;
+  }
+ }catch(e){}
+ if(!txt){
+  status('rosterStatus','<span class="chip bad">roster route unavailable</span>');
+  return;
+ }
+ const p=parseCSV(txt);
+ const ci={};p.head.forEach((h,i)=>ci[h]=i);
+ ROSTER={};
+ p.rows.forEach(r=>{ if(r.pid) ROSTER[r.pid]={team:r.team,pos:(r.pos||'').toUpperCase(),name:r.name,status:r.status}; });
+ status('rosterStatus',`<span class="chip ok">${Object.keys(ROSTER).length} players on ${yr} rosters</span>`);
+}
+$('loadRoster').onclick=loadRoster;
+
+// Replace last season's team with the current one, and drop anyone no longer
+// on a roster. Usage history stays with the player; only his team changes.
+function applyRoster(players){
+ if(!ROSTER) return {players,moved:0,dropped:0,examples:[]};
+ const out=[],ex=[];let moved=0,dropped=0;
+ for(const p of players){
+  const r=p.pid?ROSTER[p.pid]:null;
+  if(!r||!r.team||r.team==='RET'){dropped++;continue;}
+  if(r.team!==p.team){
+   if(ex.length<4)ex.push(`${p.name} ${p.team}→${r.team}`);
+   moved++;p.team=r.team;
+  }
+  out.push(p);
+ }
+ return {players:out,moved,dropped,examples:ex};
+}
+
+async function fetchSchedule(){
+ const wk=parseInt($('week').value),yr=$('slateYear').value;
+ status('schedStatus','<span class="chip">fetching…</span>');
+ // nflverse first: same team codes as the stats file, and it has future seasons.
+ try{
+  const r=await fetch(`/api/schedule?season=${yr}&week=${wk}`);
+  if(r.ok){
+   const j=await r.json();
+   if(j.games&&j.games.length){applyGames(j.games,'nflverse',yr);return;}
+  }else{
+   const j=await r.json().catch(()=>null);
+   if(j&&j.error&&j.error.startsWith('no games')){
+    status('schedStatus',`<span class="chip bad">${j.error}</span>`);
+    $('schedManual').style.display='block';return;
+   }
+  }
+ }catch(e){}
+
+ // ESPN fallback. Its abbreviations differ (LAR/WSH vs LA/WAS), so translate.
+ const FIX={LAR:'LA',WSH:'WAS',JAC:'JAX',ARZ:'ARI',CLV:'CLE',HST:'HOU',BLT:'BAL'};
+ const u=`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${wk}&dates=${yr}`;
+ try{
+  let j=null;
+  try{
+   const pr=await fetch(`/api/proxy?url=${encodeURIComponent(u)}`);
+   if(pr.ok) j=JSON.parse(await pr.text());
+  }catch(e){}
+  if(!j) j=await (await fetch(u)).json();
+  const games=[];
+  (j.events||[]).forEach(ev=>{
+   const c=ev.competitions[0].competitors;
+   const ab=x=>{const a=x.team.abbreviation;return FIX[a]||a;};
+   games.push([ab(c.find(x=>x.homeAway==='away')),ab(c.find(x=>x.homeAway==='home'))]);
+  });
+  if(!games.length)throw new Error('no games returned');
+  applyGames(games,'ESPN',yr);
+ }catch(e){
+  status('schedStatus','<span class="chip bad">fetch failed</span>');
+  $('schedManual').style.display='block';
+ }
+}
+let SCHED_YEAR=null;
+function applyGames(games,src,yr){
+ SCHED_YEAR=yr||$('slateYear').value;
+ SCHED={};
+ games.forEach(([a,h])=>{SCHED[a]=h;SCHED[h]=a;});
+ status('schedStatus',`<span class="chip ok">${games.length} games · ${SCHED_YEAR} wk ${$('week').value} · ${src}</span>`+
+  games.map(g=>`<span class="chip">${g[0]} @ ${g[1]}</span>`).join(''));
+}
+$('fetchSched').onclick=fetchSchedule;
+$('manualSched').onclick=()=>{$('schedManual').style.display='block';};
+$('applySched').onclick=()=>{
+ const games=$('schedText').value.trim().split(/\n/).map(l=>{
+  const m=l.split(/@|,|vs/i).map(s=>s.trim().toUpperCase()).filter(Boolean);
+  return m.length===2?m:null;}).filter(Boolean);
+ if(!games.length){status('schedStatus','<span class="chip bad">could not read any games</span>');return;}
+ applyGames(games,'manual');
+};
+
+function run(){
+ $('runErr').textContent='';
+ if(!RAW){$('runErr').textContent='Load the stats file first.';return;}
+ if(!SCHED){$('runErr').textContent='Set the schedule first — without it there is no opponent to match anyone against.';return;}
+ if(SCHED_YEAR&&SCHED_YEAR!==$('slateYear').value){
+  $('runErr').textContent='The loaded schedule is for '+SCHED_YEAR+' but the slate season is '+$('slateYear').value+'. Re-fetch the schedule.';return;}
+ const lb=parseInt($('lookback').value)||0;
+ let minWeek=0;
+ if(lb>0){const wks=RAW.map(r=>parseFloat(r[MAP.week])).filter(x=>isFinite(x));
+  minWeek=Math.max(...wks)-lb+1;}
+ DEF=buildDefense(RAW,MAP,minWeek);
+ PLAYERS=buildPlayers(RAW,MAP,minWeek);
+ const rr=applyRoster(PLAYERS);
+ PLAYERS=rr.players;
+ if(ROSTER) status('rosterStatus',
+  `<span class="chip ok">${rr.moved} changed team</span>`+
+  `<span class="chip">${rr.dropped} off rosters</span>`+
+  rr.examples.map(e=>`<span class="chip">${e}</span>`).join(''));
+ const board=evaluate(PLAYERS,DEF,SCHED,{
+  damp:parseFloat($('damp').value)||0.5,
+  minGames:parseInt($('minG').value)||1,
+  minBigProb:(parseFloat($('minBig').value)||0)/100,
+  minTgtPg:parseFloat($('minTgt').value)||0,
+  big:{WR:+$('bWR').value,TE:+$('bTE').value,RB:+$('bRB').value},
+ });
+ renderDef();renderBoard(board);
+ const statTeams=new Set(PLAYERS.map(p=>p.team));
+ const unmatched=Object.keys(SCHED).filter(t=>!statTeams.has(t));
+ if(unmatched.length) $('runErr').textContent=
+  'Schedule teams not found in the stats data: '+unmatched.join(', ')+
+  '. Those players are missing from the board.';
+ else if(!board.length)$('runErr').textContent=
+  'Nothing matched. Check that the schedule week and slate season are what you expect.';
+}
+$('run').onclick=run;
+$('defPos').onchange=renderDef;
+
+function renderDef(){
+ if(!DEF)return;
+ const pos=$('defPos').value, metric=pos==='RB'?'ypc':'ypt';
+ const {ranks}=rankDefenses(DEF.def,pos,metric);
+ const rows=Object.keys(ranks).map(t=>({t,r:ranks[t],v:DEF.def[t][pos][metric]}))
+  .sort((a,b)=>b.r-a.r);
+ const lg=DEF.lg[pos]?DEF.lg[pos][metric]:0;
+ $('defPanel').style.display='block';
+ $('defTable').innerHTML=`<table><tr><th>Rank</th><th>Def</th>
+  <th>${metric==='ypc'?'Yds/carry':'Yds/target'} allowed</th><th>vs league</th></tr>`+
+  rows.map(x=>{
+   const d=lg?(x.v/lg-1)*100:0;
+   const cls=x.r>=27?'f3':x.r>=22?'f2':x.r<=6?'fn':'f0';
+   return `<tr><td><span class="flag ${cls}">${x.r}</span></td><td>${x.t}</td>
+    <td>${x.v.toFixed(2)}</td><td>${d>=0?'+':''}${d.toFixed(1)}%</td></tr>`;}).join('')+
+  `</table><div class="note">League average ${lg.toFixed(2)}.</div>`;
+}
+
+function flagOf(l){return l>=0.10?['STRONG','f3']:l>=0.05?['GOOD','f2']:
+ l>=0.02?['SLIGHT','f1']:l<=-0.05?['AVOID','fn']:['NEUTRAL','f0'];}
+
+function renderBoard(board){
+ const pf=$('pos').value;
+ const b=pf==='ALL'?board:board.filter(p=>p.pos===pf);
+ $('boardPanel').style.display=b.length?'block':'none';
+ $('board').innerHTML=`<table><tr><th>Player</th><th>Opp</th><th>Proj</th>
+  <th>P(big)</th><th>Lift</th><th></th></tr>`+
+  b.slice(0,60).map((p,i)=>{const[t,c]=flagOf(p.lift);
+   return `<tr class="pl" data-i="${i}"><td>${p.name}<div class="sub2">${p.team} ${p.pos} · ${p.stat}</div></td>
+    <td>${p.opp}</td><td>${p.mean.toFixed(0)}<div class="sub2">${p.neutral.toFixed(0)} neut</div></td>
+    <td>${(p.pBig*100).toFixed(0)}%<div class="sub2">${p.thr}+</div></td>
+    <td>${p.lift>=0?'+':''}${(p.lift*100).toFixed(1)}</td>
+    <td><span class="flag ${c}">${t}</span></td></tr>`;}).join('')+`</table>`+
+  `<div class="note">Lift is the change in big-day probability caused by the opponent, in percentage points. Sorted by it. Showing ${Math.min(60,b.length)} of ${b.length}.</div>`;
+}
+$('pos').onchange=()=>{if(DEF)run();};
+</script>
